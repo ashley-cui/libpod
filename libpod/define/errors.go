@@ -181,4 +181,6 @@ var (
 	// ErrStoreNotInitialized indicates that the container storage was never
 	// initialized.
 	ErrStoreNotInitialized = errors.New("the container storage was never initialized")
+
+	ErrNoSuchSecret = errors.New("no such secret")
 )
