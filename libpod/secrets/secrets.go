@@ -36,57 +36,106 @@ type InspectSecret struct {
 	}
 }
 
-func secreteCreate(name string, data []byte, driver string) (string, error) {
+func secretCreate(name string, data []byte, driver string) (string, error) {
 	exist, err := checkSecretExist(name)
 	if err != nil {
 		return "", err
 	}
 	if exist {
+		fmt.Println("secret name in use")
 		return "", errors.New("secret name in use")
 	}
-	//for each in getsecrets()
-	// check if name is there, if not,,,,,, name a ok to go
+
 	secr := new(Secret)
 	secr.Name = name
 	secr.ID = stringid.GenerateNonCryptoID()
 	secr.Driver = driver
-	storeSecret(*secr)
-	storeSecretData(secr.ID, data)
+
+	err = storeSecret(*secr)
+	if err != nil {
+		return "", err
+	}
+	err = storeSecretData(secr.ID, data)
+	if err != nil {
+		return "", err
+	}
 	return secr.ID, nil
 }
 
 func secretRm(nameOrID string) (string, error) {
-	exist, err := checkSecretExist(nameOrIS)
-
+	exist, err := checkSecretExist(nameOrID)
+	if err != nil {
+		return "", err
+	}
 	if !exist {
 		return "", errors.New("secret is not made")
 	}
-	id, _ := deleteSecret(nameOrID)
-	deleteSecretData((id))
+	id, err := deleteSecret(nameOrID)
+	if err != nil {
+		return "", err
+	}
 	return id, nil
 }
 
-//secret db operations////////////////////////////////////
+func secretInspect(nameOrID string) (*InspectSecret, error) {
+	secret, err := getSecret(nameOrID)
+	if err != nil {
+		return nil, err
+	}
+	inspect := new(InspectSecret)
+	inspect.ID = secret.ID
+	inspect.Spec.Name = secret.Name
+	return inspect, nil
+}
+
+func secretLs() ([]Secret, error) {
+	secrets, err := getAllSecrets()
+	if err != nil {
+		return nil, err
+	}
+	var ls []Secret
+	for _, v := range secrets {
+		ls = append(ls, v)
+
+	}
+	return ls, nil
+
+}
+
+//secret db operations////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 func getDB() (*DB, error) {
-	file, err := os.Open(secretsFile) // For read access.
+	_, err := os.Stat(secretsFile) // For read access.
 	if err != nil {
 		if os.IsNotExist(err) {
-			fmt.Println("file does not exist")
-			return nil, nil
+			secretDBInit()
+		} else {
+			return nil, err
 		}
+	}
+	file, err := os.Open(secretsFile)
+	if err != nil {
 		return nil, err
 	}
 
-	byteValue, _ := ioutil.ReadAll(file)
+	byteValue, err := ioutil.ReadAll(file)
+	if err != nil {
+		fmt.Println("herre")
+		return nil, err
+	}
 	db := new(DB)
-	json.Unmarshal(byteValue, db)
+	if err = json.Unmarshal(byteValue, db); err != nil {
+		return nil, err
+	}
 	return db, nil
 
 }
 
-func lookupID(nameOrID string) (string, string, error) {
-	db, _ := getDB()
+func getNameAndID(nameOrID string) (name string, id string, err error) {
+	db, err := getDB()
+	if err != nil {
+		return "", "", err
+	}
 	idMap := db.NameToID
 	for secretName, id := range idMap {
 		if nameOrID == secretName || nameOrID == id {
@@ -97,7 +146,7 @@ func lookupID(nameOrID string) (string, string, error) {
 }
 
 func checkSecretExist(nameOrID string) (bool, error) {
-	_, _, err := lookupID(nameOrID)
+	_, _, err := getNameAndID(nameOrID)
 	if err != nil {
 		if errors.Cause(err) == define.ErrNoSuchSecret {
 			return false, nil
@@ -108,60 +157,110 @@ func checkSecretExist(nameOrID string) (bool, error) {
 }
 
 func getAllSecrets() (map[string]Secret, error) {
-	db, _ := getDB()
+	db, err := getDB()
+	if err != nil {
+		return nil, err
+	}
 	return db.Secrets, nil
-
 }
+
+func getSecret(nameOrID string) (*Secret, error) {
+	_, id, err := getNameAndID(nameOrID)
+	if err != nil {
+		return nil, err
+	}
+	allSecrets, err := getAllSecrets()
+	if err != nil {
+		return nil, err
+	}
+	secret := allSecrets[id]
+	return &secret, nil
+}
+
 func storeSecret(entry Secret) error {
-	db, _ := getDB()
+	db, err := getDB()
+	if err != nil {
+		return err
+	}
+
 	db.Secrets[entry.ID] = entry
 	db.NameToID[entry.Name] = entry.ID
-	marshalled, _ := json.MarshalIndent(db, "", "  ")
-	_ = ioutil.WriteFile("./secretoutput.json", marshalled, 0644)
-	fmt.Println(db)
+
+	marshalled, err := json.MarshalIndent(db, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	err = ioutil.WriteFile(secretsFile, marshalled, 0644)
+	if err != nil {
+		return err
+	}
+
 	return nil
 
 }
+
 func deleteSecret(nameOrID string) (string, error) {
-	name, id, _ := lookupID(nameOrID)
-	db, _ := getDB()
+	name, id, err := getNameAndID(nameOrID)
+	if err != nil {
+		return "", err
+	}
+	db, err := getDB()
+	if err != nil {
+		return "", err
+	}
 	delete(db.Secrets, id)
 	delete(db.NameToID, name)
-	marshalled, _ := json.MarshalIndent(db, "", "  ")
-	_ = ioutil.WriteFile("./secretoutput.json", marshalled, 0644)
+	marshalled, err := json.MarshalIndent(db, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	err = ioutil.WriteFile(secretsFile, marshalled, 0644)
+	if err != nil {
+		return "", err
+	}
 	return id, nil
 
 }
 
-// func createSecretsFile(){
-// 	file, _ := os.Create(secretsFile){
+func secretDBInit() error {
+	f, err := os.Create(secretsFile)
+	if err != nil {
+		return err
+	}
+	f.WriteString("{\"secrets\":{},\"nametoid\":{}}")
+	if err != nil {
+		return err
+	}
+	f.Close()
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
-// 	}
-// }
+//functions that will be interfaces///////////////////////////////////////////////////////////////////////////////////////
 
-//interfaces///////////////////////////////////////////////////////////////////////////////////////
 type secretsData struct {
 	secretData map[string][]byte
 }
 
-// func write(id string, data []byte) error { //this should be an interface function
-// 	//if encryption is needed later on, then the key would be generated in this function and stored with id
-// 	//open file
-// 	//write entry[id]=data
-// 	//close file
-// }
-
 func getAllSecretData() (*secretsData, error) {
-	file, err := os.Open(secretsDataFile) // For read access.
+	_, err := os.Stat(secretsDataFile) // For read access.
 	if err != nil {
 		if os.IsNotExist(err) {
-			fmt.Println("file does not exist")
-			return nil, nil
+			createSecretDataFile()
+		} else {
+			return nil, err
 		}
-		return nil, err
 	}
 
-	byteValue, _ := ioutil.ReadAll(file)
+	file, err := os.Open(secretsDataFile)
+
+	byteValue, err := ioutil.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
 	file.Close()
 	secrets := new(secretsData)
 	json.Unmarshal([]byte(byteValue), &secrets.secretData)
@@ -176,44 +275,74 @@ func lookupSecretData(ID string) ([]byte, error) {
 	}
 	return allSecrets.secretData[ID], nil
 
-	// if
-
 }
 
-func createSecretDataFile() {
-	f, _ := os.Create(secretsDataFile)
-	f.WriteString("{}")
+func createSecretDataFile() error {
+	f, err := os.Create(secretsDataFile)
+	if err != nil {
+		return nil
+	}
+	_, err = f.WriteString("{}")
+	if err != nil {
+		return err
+	}
 	f.Close()
-
+	return nil
 }
 
-func storeSecretData(id string, data []byte) {
-	allSecrets, _ := getAllSecretData()
+func storeSecretData(id string, data []byte) error {
+	allSecrets, err := getAllSecretData()
+	if err != nil {
+		return err
+	}
 	allSecrets.secretData[id] = data
-	marshalled, _ := json.MarshalIndent(allSecrets.secretData, "", "  ")
-	_ = ioutil.WriteFile("./dataoutput.json", marshalled, 0644)
+	marshalled, err := json.MarshalIndent(allSecrets.secretData, "", "  ")
+	if err != nil {
+		return err
+	}
+	err = ioutil.WriteFile("./secretstore.json", marshalled, 0644)
+	if err != nil {
+		return err
+	}
+	if err != nil {
+		return err
+	}
 
 }
 
-func deleteSecretData(id string) {
-	allSecrets, _ := getAllSecretData()
+func deleteSecretData(id string) error {
+	allSecrets, err := getAllSecretData()
+	if err != nil {
+		return err
+	}
 	delete(allSecrets.secretData, id)
-	marshalled, _ := json.MarshalIndent(allSecrets.secretData, "", "  ")
-	_ = ioutil.WriteFile("./dataoutput.json", marshalled, 0644)
+	marshalled, err := json.MarshalIndent(allSecrets.secretData, "", "  ")
+	if err != nil {
+		return err
+	}
+	err = ioutil.WriteFile("./secretstore.json", marshalled, 0644)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+type Driver interface {
+	getAllSecretData() (*secretsData, error)
+	lookupSecretData(ID string) ([]byte, error)
+	createSecretDataFile() error
+	storeSecretData(id string, data []byte)
+	deleteSecretData(id string)
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
-// func Hello() {
-// 	fmt.Println(storeSecret())
-// }
 
 func main() {
-	// Hello()
-	// fmt.Println(getDB())
-	// fmt.Println(createSecret("secret2", []byte("hkjdfg"), "file"))
-	// data, _ := lookupSecretData("id1")
-	// fmt.Println(string(data))
-	// deleteSecretData("aaa")
-	deleteSecret("secret1")
+
+	// id1, _ := secretCreate("secret1", []byte("secret1"), "file")
+	// secretCreate("secret2", []byte("secret2"), "file")
+	// secretRm(id1)
+
+	fmt.Println(secretLs())
 
 }
