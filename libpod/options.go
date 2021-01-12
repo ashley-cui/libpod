@@ -1698,6 +1698,17 @@ func WithUmask(umask string) CtrCreateOption {
 	}
 }
 
+// WithSecrets adds secrets to the container
+func WithSecrets(secrets []string) CtrCreateOption {
+	return func(ctr *Container) error {
+		if ctr.valid {
+			return define.ErrCtrFinalized
+		}
+		ctr.config.Secrets = secrets
+		return nil
+	}
+}
+
 // Pod Creation Options
 
 // WithInfraImage sets the infra image for libpod.

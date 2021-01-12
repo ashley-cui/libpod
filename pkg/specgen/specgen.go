@@ -236,7 +236,8 @@ type ContainerStorageConfig struct {
 	// RootfsPropagation is the rootfs propagation mode for the container.
 	// If not set, the default of rslave will be used.
 	// Optional.
-	RootfsPropagation string `json:"rootfs_propagation,omitempty"`
+	RootfsPropagation string   `json:"rootfs_propagation,omitempty"`
+	Secrets           []string `json:"secrets,omitempty"`
 }
 
 // ContainerSecurityConfig is a container's security features, including

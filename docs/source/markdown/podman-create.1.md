@@ -4,7 +4,7 @@
 podman\-create - Create a new container
 
 ## SYNOPSIS
-**podman create** [*options*] *image* [*command* [*arg* ...]]
+**podman create** [*options*]  [*command* [*arg* ...]]
 
 **podman container create** [*options*] *image* [*command* [*arg* ...]]
 

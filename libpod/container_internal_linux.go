@@ -24,6 +24,7 @@ import (
 	"github.com/containers/buildah/pkg/overlay"
 	"github.com/containers/common/pkg/apparmor"
 	"github.com/containers/common/pkg/config"
+	"github.com/containers/common/pkg/secrets"
 	"github.com/containers/common/pkg/subscriptions"
 	"github.com/containers/podman/v2/libpod/define"
 	"github.com/containers/podman/v2/libpod/events"
@@ -1496,7 +1497,21 @@ rootless=%d
 			c.state.BindMounts[mount.Destination] = mount.Source
 		}
 	}
-
+	// This must come after secretMounts, since secretMounts creates the /run/secrets dir
+	if len(c.Secrets()) != 0 {
+		for _, secret := range c.Secrets() {
+			src, dest, err := c.getSecret(secret)
+			if err != nil {
+				return err
+			}
+			fmt.Println(src)
+			fmt.Println(dest)
+			c.state.BindMounts[dest] = src
+		}
+	}
+	fmt.Println(c.runtime.store.GraphRoot())
+	fmt.Println(c.Secrets())
+	fmt.Println(c.config.StaticDir)
 	return nil
 }
 
@@ -2213,4 +2228,36 @@ func (c *Container) checkFileExistsInRootfs(file string) (bool, error) {
 		return false, nil
 	}
 	return true, nil
+}
+
+func (c *Container) getSecret(name string) (string, string, error) {
+	manager, err := secrets.NewManager("/home/acui/secrets")
+	if err != nil {
+		return "", "", err
+	}
+	secr, data, err := manager.LookupSecretData(name)
+	if err != nil {
+		return "", "", err
+	}
+
+	secretFile := filepath.Join(c.config.StaticDir, secr.Name)
+
+	f, err := os.Create(secretFile)
+	if err != nil {
+		return "", "", errors.Wrapf(err, "unable to create %s", secretFile)
+	}
+	defer f.Close()
+	if err := f.Chown(c.RootUID(), c.RootGID()); err != nil {
+		return "", "", err
+	}
+
+	if _, err := f.Write(data); err != nil {
+		return "", "", errors.Wrapf(err, "unable to write %s", secretFile)
+	}
+	// Relabel runDirResolv for the container
+	if err := label.Relabel(secretFile, c.config.MountLabel, false); err != nil {
+		return "", "", err
+	}
+	mountDest := filepath.Join("/run/secrets", secr.Name)
+	return secretFile, mountDest, nil
 }

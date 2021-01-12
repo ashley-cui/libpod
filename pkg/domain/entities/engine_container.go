@@ -78,6 +78,10 @@ type ContainerEngine interface {
 	PodStop(ctx context.Context, namesOrIds []string, options PodStopOptions) ([]*PodStopReport, error)
 	PodTop(ctx context.Context, options PodTopOptions) (*StringSliceReport, error)
 	PodUnpause(ctx context.Context, namesOrIds []string, options PodunpauseOptions) ([]*PodUnpauseReport, error)
+	SecretCreate(ctx context.Context, name string, reader io.Reader, options SecretCreateOptions) (*SecretCreateReport, error)
+	SecretInspect(ctx context.Context, nameOrIDs []string) ([]*SecretInfoReport, []error, error)
+	SecretList(ctx context.Context) ([]*SecretInfoReport, error)
+	SecretRm(ctx context.Context, nameOrID string) (*SecretRmReport, error)
 	SetupRootless(ctx context.Context, cmd *cobra.Command) error
 	Shutdown(ctx context.Context)
 	SystemDf(ctx context.Context, options SystemDfOptions) (*SystemDfReport, error)

@@ -145,7 +145,8 @@ type ContainerRootFSConfig struct {
 	// CreateWorkingDir indicates that Libpod should create the container's
 	// working directory if it does not exist. Some OCI runtimes do this by
 	// default, but others do not.
-	CreateWorkingDir bool `json:"createWorkingDir,omitempty"`
+	CreateWorkingDir bool     `json:"createWorkingDir,omitempty"`
+	Secrets          []string `json:"secrets,omitempty"`
 }
 
 // ContainerSecurityConfig is an embedded sub-config providing security configuration

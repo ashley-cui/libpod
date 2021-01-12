@@ -796,3 +796,18 @@ func (p *PodmanTestIntegration) removeCNINetwork(name string) {
 	session.WaitWithDefaultTimeout()
 	Expect(session.ExitCode()).To(BeNumerically("<=", 1))
 }
+
+// CleanupVolume cleans up the temporary store
+func (p *PodmanTestIntegration) CleanupSecret() {
+	// Remove all containers
+	session := p.Podman([]string{"volume", "rm", "-fa"})
+	session.Wait(90)
+
+	// Stop remove service on volume cleanup
+	p.StopRemoteService()
+
+	// Nuke tempdir
+	if err := os.RemoveAll(p.TempDir); err != nil {
+		fmt.Printf("%q\n", err)
+	}
+}

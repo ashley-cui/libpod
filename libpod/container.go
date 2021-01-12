@@ -1185,3 +1185,6 @@ func (d ContainerNetworkDescriptions) getInterfaceByName(networkName string) (st
 	}
 	return fmt.Sprintf("eth%d", val), exists
 }
+func (c *Container) Secrets() []string {
+	return c.config.Secrets
+}
