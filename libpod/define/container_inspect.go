@@ -62,6 +62,8 @@ type InspectContainerConfig struct {
 	SystemdMode bool `json:"SystemdMode,omitempty"`
 	// Umask is the umask inside the container.
 	Umask string `json:"Umask,omitempty"`
+	// Secrets are the secrets mounted in the container
+	Secrets []string `json:"Secrets,omitempty"`
 }
 
 // InspectRestartPolicy holds information about the container's restart policy.
